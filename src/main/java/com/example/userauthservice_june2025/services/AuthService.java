@@ -1,5 +1,7 @@
 package com.example.userauthservice_june2025.services;
 
+import com.example.userauthservice_june2025.clients.KafkaClient;
+import com.example.userauthservice_june2025.dtos.EmailDto;
 import com.example.userauthservice_june2025.exceptions.PasswordMismatchException;
 import com.example.userauthservice_june2025.exceptions.UserAlreadyExistsException;
 import com.example.userauthservice_june2025.exceptions.UserNotSignedUpException;
@@ -9,12 +11,14 @@ import com.example.userauthservice_june2025.models.Status;
 import com.example.userauthservice_june2025.models.User;
 import com.example.userauthservice_june2025.repos.SessionRepo;
 import com.example.userauthservice_june2025.repos.UserRepo;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.MacAlgorithm;
 import org.antlr.v4.runtime.misc.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -38,6 +42,12 @@ public class AuthService implements IAuthService{
     @Autowired
     SecretKey secretKey;
 
+    @Autowired
+    private KafkaClient kafkaClient;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @Override
     public User signup(String name, String email, String password, String phoneNumber) {
         Optional<User> userOptional = userRepo.findByEmail(email);
@@ -50,6 +60,19 @@ public class AuthService implements IAuthService{
         user.setEmail(email);
         user.setPassword(bCryptPasswordEncoder.encode(password));
         user.setPhoneNumber(phoneNumber);
+
+        try {
+            EmailDto emailDto = new EmailDto();
+            emailDto.setTo(email);
+            emailDto.setFrom("pruthvirajgaikwad1717@gmail.com");
+            emailDto.setSubject("Welcome to scaler");
+            emailDto.setBody("Have a good learning experience");
+
+            kafkaClient.sendMessage("signup", objectMapper.writeValueAsString(emailDto));
+        } catch (Exception e){
+            throw new RuntimeException(e.getMessage());
+        }
+
         return userRepo.save(user);
     }
 
